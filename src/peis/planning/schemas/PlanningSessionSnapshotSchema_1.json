@@ -1,0 +1,124 @@
+{
+  "$id": "https://peis/schemas/planning/PlanningSessionSnapshotSchema_1.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PlanningSessionSnapshotSchema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "planning_session_snapshot_id",
+    "created_at_utc",
+    "capability_inventory_snapshot_id",
+    "policy_snapshot_id",
+    "plan_schema_version",
+    "action_schema_version",
+    "prompt_pack_version",
+    "grounding_corpus_version",
+    "curated_examples_set_id",
+    "correction_cases_set_id",
+    "model",
+    "session"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "artifact_type": {
+      "type": "string",
+      "const": "planning_session_snapshot"
+    },
+    "planning_session_snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "capability_inventory_snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policy_snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plan_schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "action_schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "prompt_pack_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "grounding_corpus_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "curated_examples_set_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correction_cases_set_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "object",
+      "required": [
+        "provider",
+        "model_id"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_revision": {
+          "type": ["string", "null"]
+        },
+        "model_hash": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "session": {
+      "type": "object",
+      "required": [
+        "session_id",
+        "startup_state_hash",
+        "created_reason"
+      ],
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startup_state_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_reason": {
+          "type": "string",
+          "enum": [
+            "startup",
+            "startup_refresh",
+            "stale_session_rebind"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

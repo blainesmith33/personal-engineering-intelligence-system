@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "plan_record_id": "plan_smoke_test",
+  "subject_id": "subject_smoke_test",
+  "plan_type": "test",
+  "basis_decision_record_id": "decision_smoke_test",
+  "basis_stop_state": "RESOLVED",
+  "human_authorized": true,
+  "summary": "repo smoke test plan",
+  "authority": {
+    "authority_class": "authoritative",
+    "evidence_role": "decision",
+    "evidence_snapshot_id": "e1",
+    "policy_snapshot_id": "p1",
+    "source_label": "smoke_test"
+  },
+  "evidence": {
+    "evidence_snapshot_id": "e1",
+    "policy_snapshot_id": "p1"
+  },
+  "determinism": {
+    "file_hash": "fh1",
+    "extractor_binary_hash": "ebh1",
+    "extractor_config_hash": "ech1",
+    "schema_version": "1.0",
+    "policy_snapshot_id": "p1",
+    "evidence_snapshot_id": "e1"
+  },
+  "steps": [
+    {
+      "step_id": "step1",
+      "action_type": "noop",
+      "description": "smoke test step"
+    }
+  ]
+}

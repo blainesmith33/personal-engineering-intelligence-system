@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "plan_record_id": "plan_identify_next_task",
+  "subject_id": "subject_peis_repo",
+  "plan_type": "inspection",
+  "basis_decision_record_id": "decision_identify_next_task",
+  "basis_stop_state": "RESOLVED",
+  "human_authorized": true,
+  "summary": "Identify the next PEIS task from grounded repo state",
+  "authority": {
+    "authority_class": "authoritative",
+    "evidence_role": "decision",
+    "evidence_snapshot_id": "e1",
+    "policy_snapshot_id": "p1",
+    "source_label": "openwebui_local_model"
+  },
+  "evidence": {
+    "evidence_snapshot_id": "e1",
+    "policy_snapshot_id": "p1"
+  },
+  "determinism": {
+    "file_hash": "fh_identify_next_task_plan",
+    "extractor_binary_hash": "ebh1",
+    "extractor_config_hash": "ech1",
+    "schema_version": "1.0",
+    "policy_snapshot_id": "p1",
+    "evidence_snapshot_id": "e1"
+  },
+  "steps": [
+    {
+      "step_id": "step_identify_next_task",
+      "action_type": "identify_next_task",
+      "description": "Identify the next PEIS task from grounded repo state"
+    }
+  ]
+}

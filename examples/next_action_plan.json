@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "plan_record_id": "plan_next_action_pytest",
+  "subject_id": "subject_peis_repo",
+  "plan_type": "test",
+  "basis_decision_record_id": "decision_next_action_pytest",
+  "basis_stop_state": "RESOLVED",
+  "human_authorized": true,
+  "summary": "Run currently available executable improvement action",
+  "authority": {
+    "authority_class": "authoritative",
+    "evidence_role": "decision",
+    "evidence_snapshot_id": "e1",
+    "policy_snapshot_id": "p1",
+    "source_label": "openwebui_local_model_refined"
+  },
+  "evidence": {
+    "evidence_snapshot_id": "e1",
+    "policy_snapshot_id": "p1"
+  },
+  "determinism": {
+    "file_hash": "fh_next_action_plan",
+    "extractor_binary_hash": "ebh1",
+    "extractor_config_hash": "ech1",
+    "schema_version": "1.0",
+    "policy_snapshot_id": "p1",
+    "evidence_snapshot_id": "e1"
+  },
+  "steps": [
+    {
+      "step_id": "step_run_pytest",
+      "action_type": "run_pytest",
+      "description": "Run pytest for the PEIS test suite with minimal verbosity"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+.DS_Store
+.Trash-1000/
+data/
+examples/*_out/
+examples/out/

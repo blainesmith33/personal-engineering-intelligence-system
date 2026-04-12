@@ -1,0 +1,45 @@
+=== PYPROJECT / SETUP FILES ===
+
+=== CLI / MAIN FILES ===
+./src/peis/execution/cli.py
+./src/peis/runtime/gateway/main.py
+./src/peis/tests/test_execution_cli.py
+./.venv/lib/python3.12/site-packages/annotated_doc/main.py
+./.venv/lib/python3.12/site-packages/fastapi/cli.py
+./.venv/lib/python3.12/site-packages/httpx/_main.py
+./.venv/lib/python3.12/site-packages/pydantic/main.py
+./.venv/lib/python3.12/site-packages/_pytest/main.py
+./.venv/lib/python3.12/site-packages/tqdm/cli.py
+./.venv/lib/python3.12/site-packages/tqdm/_main.py
+./.venv/lib/python3.12/site-packages/uvicorn/main.py
+./.venv/lib/python3.13/site-packages/httpx/_main.py
+./.venv/lib/python3.13/site-packages/pydantic/main.py
+./.venv/lib/python3.13/site-packages/tqdm/cli.py
+./.venv/lib/python3.13/site-packages/tqdm/_main.py
+
+=== TEST FILES ===
+./src/peis/tests/test_builders.py
+./src/peis/tests/test_core_authority.py
+./src/peis/tests/test_core_determinism.py
+./src/peis/tests/test_core_enforcement.py
+./src/peis/tests/test_core_evidence.py
+./src/peis/tests/test_core_stop_states.py
+./src/peis/tests/test_decision_record.py
+./src/peis/tests/test_evaluation_record.py
+./src/peis/tests/test_execution_cli.py
+./src/peis/tests/test_execution_executor.py
+./src/peis/tests/test_execution_persist.py
+./src/peis/tests/test_execution_registry.py
+./src/peis/tests/test_execution_result_persistence.py
+./src/peis/tests/test_execution_result_record.py
+./src/peis/tests/test_execution_result_storage.py
+./src/peis/tests/test_ids.py
+./src/peis/tests/test_plan_record.py
+./src/peis/tests/test_runtime_orchestrator.py
+./src/peis/tests/test_runtime_pipeline.py
+./src/peis/tests/test_storage_load.py
+./src/peis/tests/test_storage_store.py
+./.venv/lib/python3.12/site-packages/annotated_types/test_cases.py
+./.venv/lib/python3.12/site-packages/anyio/pytest_plugin.py
+./.venv/lib/python3.13/site-packages/annotated_types/test_cases.py
+./.venv/lib/python3.13/site-packages/anyio/pytest_plugin.py

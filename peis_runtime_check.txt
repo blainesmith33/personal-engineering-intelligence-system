@@ -1,0 +1,13 @@
+=== CLI HELP CHECK ===
+usage: cli.py [-h] --plan PLAN --out OUT
+
+Execute a PlanRecord and persist results.
+
+options:
+  -h, --help   show this help message and exit
+  --plan PLAN  Path to plan_record.json
+  --out OUT    Output root directory
+
+=== PYTEST CHECK ===
+Command 'pytest' not found, but can be installed with:
+sudo apt install python3-pytest
