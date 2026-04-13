@@ -248,7 +248,23 @@ def _register_default_capabilities(
                     "state in addition to repo file presence."
                 ),
             }
-        elif summary["has_runtime_modules"] and summary["grounded_execution_capability_count"] <= 6:
+        elif (
+            summary["has_review_recent_artifacts_capability"]
+            and summary["recent_execution_artifact_count"] > 0
+            and summary["recent_artifacts_have_recommendations"]
+        ):
+            recommendation = {
+                "task_type": "artifact_driven_progression",
+                "recommended_task": (
+                    "Use grounded recent-execution artifact summaries to choose the next smallest "
+                    "implementation-hardening task from actual PEIS history."
+                ),
+                "reason": (
+                    "PEIS can now inspect recent execution artifacts and surface concrete recent outcomes "
+                    "and recommendations from persisted execution evidence."
+                ),
+            }
+        elif summary["has_runtime_modules"] and summary["grounded_execution_capability_count"] <= 7:
             recommendation = {
                 "task_type": "execution_surface_growth",
                 "recommended_task": (
@@ -395,6 +411,62 @@ def _register_default_capabilities(
             "next_observation": "Runtime/API readiness inspected from grounded repo-state facts.",
         }
 
+    def review_recent_artifacts_handler(payload: dict[str, Any]) -> dict[str, Any]:
+        artifacts_state = _collect_recent_artifacts_state(
+            payload,
+            repo_root=repo_root,
+            repo_python=repo_python,
+        )
+        if artifacts_state["status"] != "ok":
+            return artifacts_state
+
+        summary = artifacts_state["artifacts_summary"]
+
+        if summary["recent_execution_artifact_count"] == 0:
+            recommendation = {
+                "task_type": "artifact_absence",
+                "recommended_task": (
+                    "Run one or more grounded execution capabilities so PEIS has recent execution "
+                    "artifacts to analyze."
+                ),
+                "reason": "No recent execution artifacts were found in the canonical execution artifact directory.",
+            }
+        elif summary["most_recent_execution_status"] == "FAILED":
+            recommendation = {
+                "task_type": "failure_followup",
+                "recommended_task": (
+                    "Inspect the most recent failed execution artifact and resolve the latest concrete "
+                    "execution error before widening scope."
+                ),
+                "reason": "The latest execution artifact indicates a failed run.",
+            }
+        elif summary["latest_recommended_task"] is not None:
+            recommendation = {
+                "task_type": "artifact_driven_progression",
+                "recommended_task": summary["latest_recommended_task"],
+                "reason": (
+                    "The most recent grounded execution artifacts already contain a concrete next-task "
+                    "recommendation from persisted PEIS execution evidence."
+                ),
+            }
+        else:
+            recommendation = {
+                "task_type": "artifact_review_complete",
+                "recommended_task": (
+                    "Use the recent execution artifact history to choose the next smallest grounded "
+                    "implementation task."
+                ),
+                "reason": "Recent execution artifacts were inspected successfully, but no embedded recommendation was found.",
+            }
+
+        return {
+            "status": "ok",
+            "repo_path": str(repo_root),
+            "artifacts_summary": summary,
+            "recommended_next_task": recommendation,
+            "next_observation": "Recent execution artifacts reviewed from canonical execution artifact storage.",
+        }
+
     registry.register(
         Capability(
             action_type="noop",
@@ -434,6 +506,13 @@ def _register_default_capabilities(
         Capability(
             action_type="review_runtime_surface",
             handler=review_runtime_surface_handler,
+        )
+    )
+
+    registry.register(
+        Capability(
+            action_type="review_recent_artifacts",
+            handler=review_recent_artifacts_handler,
         )
     )
 
@@ -543,6 +622,7 @@ def _collect_repo_state(
     recent_execution_artifacts = _list_recent_json_files(execution_artifacts_dir, limit=5)
     recent_planning_artifacts = _list_recent_json_files(planning_artifacts_dir, limit=5)
     runtime_surface_summary = _collect_runtime_surface_summary(repo_root)
+    recent_artifacts_summary = _collect_recent_artifacts_summary(repo_root)
 
     return {
         "status": "ok",
@@ -579,6 +659,9 @@ def _collect_repo_state(
             "recent_planning_artifacts": recent_planning_artifacts,
             "runtime_surface_requires_openai_api_key": runtime_surface_summary["runtime_surface_requires_openai_api_key"],
             "runtime_surface_has_launcher_mismatch": runtime_surface_summary["runtime_surface_has_launcher_mismatch"],
+            "recent_execution_artifact_count": recent_artifacts_summary["recent_execution_artifact_count"],
+            "recent_artifacts_have_recommendations": recent_artifacts_summary["recent_artifacts_have_recommendations"],
+            "most_recent_execution_status": recent_artifacts_summary["most_recent_execution_status"],
         },
         "next_observation": (
             "Repository state collected from authoritative repo files and artifact directories only. "
@@ -621,6 +704,41 @@ def _collect_runtime_surface_state(
         "next_observation": (
             "Runtime/API surface collected from gateway modules and launch scripts only."
         ),
+    }
+
+
+def _collect_recent_artifacts_state(
+    payload: dict[str, Any],
+    *,
+    repo_root: Path,
+    repo_python: Path,
+) -> dict[str, Any]:
+    payload_repo_path = payload.get("repo_path")
+    if isinstance(payload_repo_path, str) and payload_repo_path.strip():
+        requested_repo_root = Path(payload_repo_path).expanduser().resolve()
+        if requested_repo_root != repo_root:
+            return {
+                "status": "failed",
+                "error": (
+                    f"repo path override does not match authoritative repo root: "
+                    f"requested={requested_repo_root} authoritative={repo_root}"
+                ),
+            }
+
+    if not repo_root.exists() or not repo_root.is_dir():
+        return {
+            "status": "failed",
+            "error": f"repo path is invalid: {repo_root}",
+        }
+
+    artifacts_summary = _collect_recent_artifacts_summary(repo_root)
+    artifacts_summary["repo_python_executable"] = str(repo_python)
+
+    return {
+        "status": "ok",
+        "repo_path": str(repo_root),
+        "artifacts_summary": artifacts_summary,
+        "next_observation": "Recent execution artifacts collected from canonical execution artifact storage.",
     }
 
 
@@ -736,6 +854,122 @@ def _collect_runtime_surface_summary(repo_root: Path) -> dict[str, Any]:
         "runtime_surface_has_launcher_mismatch": launcher_mismatch,
         "launcher_mismatch_reasons": mismatch_reasons,
         "runtime_readiness_summary": readiness_summary,
+    }
+
+
+def _collect_recent_artifacts_summary(repo_root: Path) -> dict[str, Any]:
+    artifact_paths = _list_recent_json_files(
+        repo_root / "data" / "execution_artifacts",
+        limit=5,
+    )
+
+    parsed_artifacts: list[dict[str, Any]] = []
+    parse_errors: list[str] = []
+
+    for artifact_path in artifact_paths:
+        try:
+            payload = json.loads(Path(artifact_path).read_text(encoding="utf-8"))
+        except Exception as exc:
+            parse_errors.append(f"{artifact_path}: {exc}")
+            continue
+
+        if isinstance(payload, dict):
+            parsed_artifacts.append(payload)
+        else:
+            parse_errors.append(f"{artifact_path}: payload is not an object")
+
+    most_recent_execution_status: str | None = None
+    most_recent_plan_record_id: str | None = None
+    latest_recommended_task: str | None = None
+    latest_recommendation_reason: str | None = None
+    latest_recommendation_task_type: str | None = None
+    most_recent_action_types: list[str] = []
+    recent_action_types: list[str] = []
+    recent_execution_statuses: list[str] = []
+    recent_plan_record_ids: list[str] = []
+    recent_artifacts_have_recommendations = False
+    repeated_recommendation_task_types: list[str] = []
+
+    recommendation_task_types: list[str] = []
+
+    for index, artifact in enumerate(parsed_artifacts):
+        execution_status = artifact.get("execution_status")
+        if isinstance(execution_status, str):
+            recent_execution_statuses.append(execution_status)
+            if index == 0:
+                most_recent_execution_status = execution_status
+
+        plan_record_id = artifact.get("plan_record_id")
+        if isinstance(plan_record_id, str):
+            recent_plan_record_ids.append(plan_record_id)
+            if index == 0:
+                most_recent_plan_record_id = plan_record_id
+
+        step_results = artifact.get("step_results")
+        if isinstance(step_results, list):
+            artifact_action_types: list[str] = []
+            for step in step_results:
+                if not isinstance(step, dict):
+                    continue
+
+                action_type = step.get("action_type")
+                if isinstance(action_type, str) and action_type.strip():
+                    artifact_action_types.append(action_type.strip())
+                    if action_type.strip() not in recent_action_types:
+                        recent_action_types.append(action_type.strip())
+
+                if latest_recommended_task is None:
+                    output_payload = step.get("output_payload")
+                    if isinstance(output_payload, dict):
+                        recommended_next_task = output_payload.get("recommended_next_task")
+                        if isinstance(recommended_next_task, dict):
+                            recommended_task = recommended_next_task.get("recommended_task")
+                            recommendation_reason = recommended_next_task.get("reason")
+                            recommendation_task_type = recommended_next_task.get("task_type")
+
+                            if isinstance(recommended_task, str) and recommended_task.strip():
+                                latest_recommended_task = recommended_task.strip()
+                                recent_artifacts_have_recommendations = True
+
+                            if isinstance(recommendation_reason, str) and recommendation_reason.strip():
+                                latest_recommendation_reason = recommendation_reason.strip()
+
+                            if isinstance(recommendation_task_type, str) and recommendation_task_type.strip():
+                                latest_recommendation_task_type = recommendation_task_type.strip()
+
+                output_payload = step.get("output_payload")
+                if isinstance(output_payload, dict):
+                    recommended_next_task = output_payload.get("recommended_next_task")
+                    if isinstance(recommended_next_task, dict):
+                        task_type = recommended_next_task.get("task_type")
+                        if isinstance(task_type, str) and task_type.strip():
+                            recommendation_task_types.append(task_type.strip())
+                            recent_artifacts_have_recommendations = True
+
+            if index == 0:
+                most_recent_action_types = artifact_action_types
+
+    repeated_recommendation_task_types = sorted(
+        task_type
+        for task_type in set(recommendation_task_types)
+        if recommendation_task_types.count(task_type) > 1
+    )
+
+    return {
+        "recent_execution_artifact_count": len(parsed_artifacts),
+        "recent_execution_artifact_paths": artifact_paths,
+        "recent_artifact_parse_errors": parse_errors,
+        "most_recent_execution_status": most_recent_execution_status,
+        "most_recent_plan_record_id": most_recent_plan_record_id,
+        "most_recent_action_types": most_recent_action_types,
+        "recent_action_types": recent_action_types,
+        "recent_execution_statuses": recent_execution_statuses,
+        "recent_plan_record_ids": recent_plan_record_ids,
+        "recent_artifacts_have_recommendations": recent_artifacts_have_recommendations,
+        "latest_recommended_task": latest_recommended_task,
+        "latest_recommendation_reason": latest_recommendation_reason,
+        "latest_recommendation_task_type": latest_recommendation_task_type,
+        "repeated_recommendation_task_types": repeated_recommendation_task_types,
     }
 
 
@@ -885,6 +1119,17 @@ def _convert_to_execution_result_record(plan_record, plan_result):
         if step.status.strip().lower() in {"failed", "error"}:
             normalized_status = "FAILED"
 
+        error_payload = None
+        if normalized_status == "FAILED":
+            raw_error = step.output.get("error")
+            if isinstance(raw_error, dict):
+                error_payload = raw_error
+            else:
+                error_payload = {
+                    "error_type": "execution_failure",
+                    "message": str(raw_error) if raw_error is not None else "step failed without structured error payload",
+                }
+
         step_results.append(
             {
                 "step_index": idx,
@@ -892,8 +1137,8 @@ def _convert_to_execution_result_record(plan_record, plan_result):
                 "action_type": step.action_type,
                 "status": normalized_status,
                 "input_payload": {},
-                "output_payload": step.output,
-                "error": None if normalized_status == "SUCCEEDED" else step.output.get("error"),
+                "output_payload": step.output if normalized_status == "SUCCEEDED" else None,
+                "error": error_payload,
             }
         )
 
