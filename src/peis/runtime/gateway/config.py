@@ -107,6 +107,56 @@ def _require_non_empty(value: str | None, *, field_name: str) -> str:
     return normalized
 
 
+def get_gateway_startup_requirements() -> dict[str, object]:
+    """
+    Return the canonical startup requirements for the PEIS gateway.
+
+    This is intended for launch-time validation and user-facing startup errors.
+    """
+    return {
+        "required_environment_variables": ["OPENAI_API_KEY"],
+        "default_host": DEFAULT_HOST,
+        "default_port": DEFAULT_PORT,
+        "default_ollama_base_url": DEFAULT_OLLAMA_BASE_URL,
+        "default_local_model_name": DEFAULT_LOCAL_MODEL,
+        "default_openai_model_name": DEFAULT_OPENAI_MODEL,
+    }
+
+
+def build_gateway_startup_error_message(error: GatewayConfigError) -> str:
+    """
+    Convert a GatewayConfigError into a launch-time error message that makes the
+    missing or invalid requirement explicit.
+    """
+    requirements = get_gateway_startup_requirements()
+
+    lines = [
+        "PEIS gateway startup failed.",
+        "",
+        f"Configuration error: {error}",
+        "",
+        "Gateway startup requirements:",
+        f"- Required environment variables: {', '.join(requirements['required_environment_variables'])}",
+        f"- Default host: {requirements['default_host']}",
+        f"- Default port: {requirements['default_port']}",
+        f"- Default Ollama base URL: {requirements['default_ollama_base_url']}",
+        f"- Default local model: {requirements['default_local_model_name']}",
+        f"- Default OpenAI model: {requirements['default_openai_model_name']}",
+    ]
+
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    if openai_api_key is None or not openai_api_key.strip():
+        lines.extend(
+            [
+                "",
+                "OPENAI_API_KEY is missing or empty.",
+                "Set it before starting the gateway.",
+            ]
+        )
+
+    return "\n".join(lines)
+
+
 @dataclass(frozen=True, slots=True)
 class GatewayConfig:
     """

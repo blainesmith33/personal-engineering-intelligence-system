@@ -3,7 +3,11 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
-from peis.runtime.gateway.config import load_gateway_config
+from peis.runtime.gateway.config import (
+    GatewayConfigError,
+    build_gateway_startup_error_message,
+    load_gateway_config,
+)
 from peis.runtime.gateway.schemas import (
     ChatCompletionRequest,
     ChatMessage,
@@ -17,11 +21,17 @@ from peis.runtime.gateway.orchestrator import (
 
 app = FastAPI(title="PEIS Gateway", version="1.0.0")
 
-try:
-    _config = load_gateway_config()
-    _orchestrator = GatewayOrchestrator(_config)
-except Exception as exc:
-    raise RuntimeError(f"failed to initialize gateway: {exc}") from exc
+
+def _build_orchestrator() -> GatewayOrchestrator:
+    try:
+        config = load_gateway_config()
+    except GatewayConfigError as exc:
+        raise RuntimeError(build_gateway_startup_error_message(exc)) from exc
+
+    try:
+        return GatewayOrchestrator(config)
+    except Exception as exc:
+        raise RuntimeError(f"failed to initialize gateway orchestrator: {exc}") from exc
 
 
 @app.get("/health")
@@ -52,7 +62,8 @@ def chat_completions(payload: dict):
         request = _parse_request(payload)
         user_message = request.get_last_user_message()
 
-        result = _orchestrator.run(user_message)
+        orchestrator = _build_orchestrator()
+        result = orchestrator.run(user_message)
 
         response = build_response(
             model="peis-gateway",
@@ -65,6 +76,9 @@ def chat_completions(payload: dict):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     except GatewayOrchestratorError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     except Exception as exc:
