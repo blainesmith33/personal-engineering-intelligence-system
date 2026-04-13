@@ -236,6 +236,7 @@ def _register_default_capabilities(
         elif (
             summary["has_review_runtime_surface_capability"]
             and summary["runtime_surface_requires_openai_api_key"]
+            and not summary["runtime_surface_has_explicit_startup_requirements"]
         ):
             recommendation = {
                 "task_type": "runtime_env_hardening",
@@ -244,8 +245,8 @@ def _register_default_capabilities(
                     "required OPENAI_API_KEY before gateway startup."
                 ),
                 "reason": (
-                    "Gateway config requires OPENAI_API_KEY, so runtime readiness depends on environment "
-                    "state in addition to repo file presence."
+                    "Gateway config requires OPENAI_API_KEY, but the runtime startup surface does not yet "
+                    "appear to expose that requirement explicitly to the operator."
                 ),
             }
         elif (
@@ -367,7 +368,10 @@ def _register_default_capabilities(
                     "runtime gateway defaults."
                 ),
             }
-        elif summary["runtime_surface_requires_openai_api_key"]:
+        elif (
+            summary["runtime_surface_requires_openai_api_key"]
+            and not summary["runtime_surface_has_explicit_startup_requirements"]
+        ):
             recommendation = {
                 "task_type": "runtime_env_hardening",
                 "recommended_task": (
@@ -375,8 +379,8 @@ def _register_default_capabilities(
                     "the required OPENAI_API_KEY before gateway startup."
                 ),
                 "reason": (
-                    "Gateway config hard-requires OPENAI_API_KEY, so runtime readiness depends on "
-                    "environment state in addition to file presence."
+                    "Gateway config hard-requires OPENAI_API_KEY, but the runtime startup surface does "
+                    "not yet appear to expose that requirement explicitly to the operator."
                 ),
             }
         elif not summary["gateway_health_endpoint_present"]:
@@ -399,7 +403,8 @@ def _register_default_capabilities(
                     "execution-surface expansion task."
                 ),
                 "reason": (
-                    "Runtime entrypoints, config surface, and launch paths were inspected from repo facts."
+                    "Runtime entrypoints, config surface, launch paths, and startup-readiness messaging "
+                    "were inspected from repo facts."
                 ),
             }
 
@@ -539,7 +544,8 @@ def _collect_repo_state(
     )
 
     top_level_scripts = sorted(
-        p.name for p in repo_root.iterdir()
+        p.name
+        for p in repo_root.iterdir()
         if p.is_file() and p.suffix == ".py"
     )
 
@@ -617,6 +623,7 @@ def _collect_repo_state(
             "recent_execution_artifacts": recent_execution_artifacts,
             "recent_planning_artifacts": recent_planning_artifacts,
             "runtime_surface_requires_openai_api_key": runtime_surface_summary["runtime_surface_requires_openai_api_key"],
+            "runtime_surface_has_explicit_startup_requirements": runtime_surface_summary["runtime_surface_has_explicit_startup_requirements"],
             "runtime_surface_has_launcher_mismatch": runtime_surface_summary["runtime_surface_has_launcher_mismatch"],
             "recent_execution_artifact_count": recent_artifacts_summary["recent_execution_artifact_count"],
             "recent_artifacts_have_recommendations": recent_artifacts_summary["recent_artifacts_have_recommendations"],
@@ -738,6 +745,32 @@ def _collect_runtime_surface_summary(repo_root: Path) -> dict[str, Any]:
         and "_orchestrator = GatewayOrchestrator(_config)" in api_source
     )
 
+    has_gateway_startup_requirements_function = (
+        "def get_gateway_startup_requirements(" in config_source
+    )
+    has_gateway_startup_error_builder = (
+        "def build_gateway_startup_error_message(" in config_source
+    )
+    startup_error_mentions_required_environment_variables = (
+        "Required environment variables" in config_source
+    )
+    startup_error_mentions_missing_openai_api_key = (
+        "OPENAI_API_KEY is missing or empty." in config_source
+    )
+    startup_error_mentions_set_before_start = (
+        "Set it before starting the gateway." in config_source
+    )
+
+    runtime_surface_has_explicit_startup_requirements = all(
+        [
+            has_gateway_startup_requirements_function,
+            has_gateway_startup_error_builder,
+            startup_error_mentions_required_environment_variables,
+            startup_error_mentions_missing_openai_api_key,
+            startup_error_mentions_set_before_start,
+        ]
+    )
+
     run_script_targets_peis_server_app = "uvicorn peis.server:app" in run_server_source
     run_script_targets_gateway_main = (
         "peis.runtime.gateway.main" in run_server_source
@@ -776,6 +809,7 @@ def _collect_runtime_surface_summary(repo_root: Path) -> dict[str, Any]:
         has_gateway_schemas=has_gateway_schemas,
         has_gateway_orchestrator=has_gateway_orchestrator,
         gateway_requires_openai_api_key=gateway_requires_openai_api_key,
+        runtime_surface_has_explicit_startup_requirements=runtime_surface_has_explicit_startup_requirements,
         launcher_mismatch=launcher_mismatch,
     )
 
@@ -789,6 +823,7 @@ def _collect_runtime_surface_summary(repo_root: Path) -> dict[str, Any]:
         "has_start_peis_script": has_start_peis_script,
         "gateway_requires_openai_api_key": gateway_requires_openai_api_key,
         "runtime_surface_requires_openai_api_key": gateway_requires_openai_api_key,
+        "runtime_surface_has_explicit_startup_requirements": runtime_surface_has_explicit_startup_requirements,
         "default_ollama_base_url": default_ollama_base_url,
         "default_gateway_host": default_gateway_host,
         "default_gateway_port": default_gateway_port,
@@ -984,6 +1019,7 @@ def _build_runtime_readiness_summary(
     has_gateway_schemas: bool,
     has_gateway_orchestrator: bool,
     gateway_requires_openai_api_key: bool,
+    runtime_surface_has_explicit_startup_requirements: bool,
     launcher_mismatch: bool,
 ) -> str:
     if not all(
@@ -1006,10 +1042,16 @@ def _build_runtime_readiness_summary(
             "with the gateway entrypoint and/or default port."
         )
 
-    if gateway_requires_openai_api_key:
+    if gateway_requires_openai_api_key and not runtime_surface_has_explicit_startup_requirements:
         return (
-            "Runtime gateway surface exists and is structurally present, but readiness still "
-            "depends on required environment configuration such as OPENAI_API_KEY."
+            "Runtime gateway surface exists and requires OPENAI_API_KEY, but the startup path "
+            "does not yet appear to expose that requirement explicitly to the operator."
+        )
+
+    if gateway_requires_openai_api_key and runtime_surface_has_explicit_startup_requirements:
+        return (
+            "Runtime gateway surface exists, requires OPENAI_API_KEY, and appears to expose "
+            "startup requirements explicitly to the operator."
         )
 
     return "Runtime gateway surface appears structurally present from repo facts."
