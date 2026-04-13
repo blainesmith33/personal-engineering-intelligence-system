@@ -422,6 +422,20 @@ def _register_default_capabilities(
 
         summary = artifacts_state["artifacts_summary"]
 
+        promoted_task = (
+            summary["preferred_latest_recommended_task"]
+            or summary["latest_recommended_task"]
+        )
+        promoted_reason = (
+            summary["preferred_latest_recommendation_reason"]
+            or "The most recent grounded execution artifacts already contain a concrete next-task recommendation from persisted PEIS execution evidence."
+        )
+        promoted_task_type = (
+            summary["preferred_latest_recommendation_task_type"]
+            or summary["latest_recommendation_task_type"]
+            or "artifact_driven_progression"
+        )
+
         if summary["recent_execution_artifact_count"] == 0:
             recommendation = {
                 "task_type": "artifact_absence",
@@ -440,14 +454,11 @@ def _register_default_capabilities(
                 ),
                 "reason": "The latest execution artifact indicates a failed run.",
             }
-        elif summary["latest_recommended_task"] is not None:
+        elif promoted_task is not None:
             recommendation = {
-                "task_type": "artifact_driven_progression",
-                "recommended_task": summary["latest_recommended_task"],
-                "reason": (
-                    "The most recent grounded execution artifacts already contain a concrete next-task "
-                    "recommendation from persisted PEIS execution evidence."
-                ),
+                "task_type": promoted_task_type,
+                "recommended_task": promoted_task,
+                "reason": promoted_reason,
             }
         else:
             recommendation = {
@@ -467,54 +478,13 @@ def _register_default_capabilities(
             "next_observation": "Recent execution artifacts reviewed from canonical execution artifact storage.",
         }
 
-    registry.register(
-        Capability(
-            action_type="noop",
-            handler=noop_handler,
-        )
-    )
-
-    registry.register(
-        Capability(
-            action_type="run_pytest",
-            handler=run_pytest_handler,
-        )
-    )
-
-    registry.register(
-        Capability(
-            action_type="identify_next_task",
-            handler=identify_next_task_handler,
-        )
-    )
-
-    registry.register(
-        Capability(
-            action_type="summarize_current_blocker",
-            handler=summarize_current_blocker_handler,
-        )
-    )
-
-    registry.register(
-        Capability(
-            action_type="review_repo_state",
-            handler=review_repo_state_handler,
-        )
-    )
-
-    registry.register(
-        Capability(
-            action_type="review_runtime_surface",
-            handler=review_runtime_surface_handler,
-        )
-    )
-
-    registry.register(
-        Capability(
-            action_type="review_recent_artifacts",
-            handler=review_recent_artifacts_handler,
-        )
-    )
+    registry.register(Capability(action_type="noop", handler=noop_handler))
+    registry.register(Capability(action_type="run_pytest", handler=run_pytest_handler))
+    registry.register(Capability(action_type="identify_next_task", handler=identify_next_task_handler))
+    registry.register(Capability(action_type="summarize_current_blocker", handler=summarize_current_blocker_handler))
+    registry.register(Capability(action_type="review_repo_state", handler=review_repo_state_handler))
+    registry.register(Capability(action_type="review_runtime_surface", handler=review_runtime_surface_handler))
+    registry.register(Capability(action_type="review_recent_artifacts", handler=review_recent_artifacts_handler))
 
 
 def _collect_repo_state(
@@ -547,13 +517,7 @@ def _collect_repo_state(
             "error": f"repo path is not a directory: {repo_root}",
         }
 
-    exclude_dirs = {
-        ".venv",
-        ".pytest_cache",
-        "__pycache__",
-        ".Trash-1000",
-        ".git",
-    }
+    exclude_dirs = {".venv", ".pytest_cache", "__pycache__", ".Trash-1000", ".git"}
 
     def is_excluded(path: Path) -> bool:
         return any(part in exclude_dirs for part in path.parts)
@@ -575,8 +539,7 @@ def _collect_repo_state(
     )
 
     top_level_scripts = sorted(
-        p.name
-        for p in repo_root.iterdir()
+        p.name for p in repo_root.iterdir()
         if p.is_file() and p.suffix == ".py"
     )
 
@@ -611,11 +574,7 @@ def _collect_repo_state(
             p.name for p in src_dir.iterdir() if p.is_dir()
         )
         src_python_files = len(
-            [
-                p
-                for p in src_dir.rglob("*.py")
-                if "__pycache__" not in p.parts
-            ]
+            [p for p in src_dir.rglob("*.py") if "__pycache__" not in p.parts]
         )
 
     grounded_actions = _extract_grounded_action_types(execution_cli)
@@ -766,22 +725,12 @@ def _collect_runtime_surface_summary(repo_root: Path) -> dict[str, Any]:
     start_peis_source = _safe_read_text(start_peis_script)
 
     gateway_requires_openai_api_key = "OPENAI_API_KEY" in config_source
-    default_ollama_base_url = _extract_python_constant(
-        config_source,
-        "DEFAULT_OLLAMA_BASE_URL",
-    )
-    default_gateway_host = _extract_python_constant(
-        config_source,
-        "DEFAULT_HOST",
-    )
-    default_gateway_port = _extract_python_constant(
-        config_source,
-        "DEFAULT_PORT",
-    )
+    default_ollama_base_url = _extract_python_constant(config_source, "DEFAULT_OLLAMA_BASE_URL")
+    default_gateway_host = _extract_python_constant(config_source, "DEFAULT_HOST")
+    default_gateway_port = _extract_python_constant(config_source, "DEFAULT_PORT")
 
     gateway_health_endpoint_present = (
-        '@app.get("/health")' in api_source
-        or "@app.get('/health')" in api_source
+        '@app.get("/health")' in api_source or "@app.get('/health')" in api_source
     )
 
     gateway_import_initializes_orchestrator = (
@@ -883,21 +832,30 @@ def _collect_recent_artifacts_summary(repo_root: Path) -> dict[str, Any]:
     latest_recommended_task: str | None = None
     latest_recommendation_reason: str | None = None
     latest_recommendation_task_type: str | None = None
+
+    preferred_latest_recommended_task: str | None = None
+    preferred_latest_recommendation_reason: str | None = None
+    preferred_latest_recommendation_task_type: str | None = None
+
     most_recent_action_types: list[str] = []
     recent_action_types: list[str] = []
     recent_execution_statuses: list[str] = []
     recent_plan_record_ids: list[str] = []
     recent_artifacts_have_recommendations = False
     repeated_recommendation_task_types: list[str] = []
-
     recommendation_task_types: list[str] = []
+
+    preferred_candidates_succeeded: list[tuple[str, str | None, str | None]] = []
+    preferred_candidates_any: list[tuple[str, str | None, str | None]] = []
 
     for index, artifact in enumerate(parsed_artifacts):
         execution_status = artifact.get("execution_status")
-        if isinstance(execution_status, str):
-            recent_execution_statuses.append(execution_status)
+        artifact_execution_status = execution_status if isinstance(execution_status, str) else None
+
+        if artifact_execution_status:
+            recent_execution_statuses.append(artifact_execution_status)
             if index == 0:
-                most_recent_execution_status = execution_status
+                most_recent_execution_status = artifact_execution_status
 
         plan_record_id = artifact.get("plan_record_id")
         if isinstance(plan_record_id, str):
@@ -906,48 +864,90 @@ def _collect_recent_artifacts_summary(repo_root: Path) -> dict[str, Any]:
                 most_recent_plan_record_id = plan_record_id
 
         step_results = artifact.get("step_results")
-        if isinstance(step_results, list):
-            artifact_action_types: list[str] = []
-            for step in step_results:
-                if not isinstance(step, dict):
-                    continue
+        if not isinstance(step_results, list):
+            continue
 
-                action_type = step.get("action_type")
-                if isinstance(action_type, str) and action_type.strip():
-                    artifact_action_types.append(action_type.strip())
-                    if action_type.strip() not in recent_action_types:
-                        recent_action_types.append(action_type.strip())
+        artifact_action_types: list[str] = []
+
+        for step in step_results:
+            if not isinstance(step, dict):
+                continue
+
+            action_type = step.get("action_type")
+            normalized_action_type = (
+                action_type.strip()
+                if isinstance(action_type, str) and action_type.strip()
+                else None
+            )
+
+            if normalized_action_type:
+                artifact_action_types.append(normalized_action_type)
+                if normalized_action_type not in recent_action_types:
+                    recent_action_types.append(normalized_action_type)
+
+            output_payload = step.get("output_payload")
+            if not isinstance(output_payload, dict):
+                continue
+
+            recommended_next_task = output_payload.get("recommended_next_task")
+            if not isinstance(recommended_next_task, dict):
+                continue
+
+            recommended_task = recommended_next_task.get("recommended_task")
+            recommendation_reason = recommended_next_task.get("reason")
+            recommendation_task_type = recommended_next_task.get("task_type")
+
+            normalized_task = (
+                recommended_task.strip()
+                if isinstance(recommended_task, str) and recommended_task.strip()
+                else None
+            )
+            normalized_reason = (
+                recommendation_reason.strip()
+                if isinstance(recommendation_reason, str) and recommendation_reason.strip()
+                else None
+            )
+            normalized_task_type = (
+                recommendation_task_type.strip()
+                if isinstance(recommendation_task_type, str) and recommendation_task_type.strip()
+                else None
+            )
+
+            if normalized_task:
+                recent_artifacts_have_recommendations = True
 
                 if latest_recommended_task is None:
-                    output_payload = step.get("output_payload")
-                    if isinstance(output_payload, dict):
-                        recommended_next_task = output_payload.get("recommended_next_task")
-                        if isinstance(recommended_next_task, dict):
-                            recommended_task = recommended_next_task.get("recommended_task")
-                            recommendation_reason = recommended_next_task.get("reason")
-                            recommendation_task_type = recommended_next_task.get("task_type")
+                    latest_recommended_task = normalized_task
+                    latest_recommendation_reason = normalized_reason
+                    latest_recommendation_task_type = normalized_task_type
 
-                            if isinstance(recommended_task, str) and recommended_task.strip():
-                                latest_recommended_task = recommended_task.strip()
-                                recent_artifacts_have_recommendations = True
+                if normalized_task_type:
+                    recommendation_task_types.append(normalized_task_type)
 
-                            if isinstance(recommendation_reason, str) and recommendation_reason.strip():
-                                latest_recommendation_reason = recommendation_reason.strip()
+                if normalized_action_type != "review_recent_artifacts":
+                    preferred_candidates_any.append(
+                        (normalized_task, normalized_reason, normalized_task_type)
+                    )
 
-                            if isinstance(recommendation_task_type, str) and recommendation_task_type.strip():
-                                latest_recommendation_task_type = recommendation_task_type.strip()
+                    if artifact_execution_status == "SUCCEEDED":
+                        preferred_candidates_succeeded.append(
+                            (normalized_task, normalized_reason, normalized_task_type)
+                        )
 
-                output_payload = step.get("output_payload")
-                if isinstance(output_payload, dict):
-                    recommended_next_task = output_payload.get("recommended_next_task")
-                    if isinstance(recommended_next_task, dict):
-                        task_type = recommended_next_task.get("task_type")
-                        if isinstance(task_type, str) and task_type.strip():
-                            recommendation_task_types.append(task_type.strip())
-                            recent_artifacts_have_recommendations = True
+        if index == 0:
+            most_recent_action_types = artifact_action_types
 
-            if index == 0:
-                most_recent_action_types = artifact_action_types
+    preferred_source = (
+        preferred_candidates_succeeded
+        or preferred_candidates_any
+    )
+
+    if preferred_source:
+        (
+            preferred_latest_recommended_task,
+            preferred_latest_recommendation_reason,
+            preferred_latest_recommendation_task_type,
+        ) = preferred_source[0]
 
     repeated_recommendation_task_types = sorted(
         task_type
@@ -969,6 +969,9 @@ def _collect_recent_artifacts_summary(repo_root: Path) -> dict[str, Any]:
         "latest_recommended_task": latest_recommended_task,
         "latest_recommendation_reason": latest_recommendation_reason,
         "latest_recommendation_task_type": latest_recommendation_task_type,
+        "preferred_latest_recommended_task": preferred_latest_recommended_task,
+        "preferred_latest_recommendation_reason": preferred_latest_recommendation_reason,
+        "preferred_latest_recommendation_task_type": preferred_latest_recommendation_task_type,
         "repeated_recommendation_task_types": repeated_recommendation_task_types,
     }
 
@@ -1009,9 +1012,7 @@ def _build_runtime_readiness_summary(
             "depends on required environment configuration such as OPENAI_API_KEY."
         )
 
-    return (
-        "Runtime gateway surface appears structurally present from repo facts."
-    )
+    return "Runtime gateway surface appears structurally present from repo facts."
 
 
 def _safe_read_text(path: Path) -> str:
@@ -1039,7 +1040,6 @@ def _extract_python_constant(source: str, constant_name: str) -> str | int | flo
                     value_node = node.value
                     if isinstance(value_node, ast.Constant):
                         return value_node.value
-
         elif isinstance(node, ast.AnnAssign):
             target = node.target
             if isinstance(target, ast.Name) and target.id == constant_name:
@@ -1127,7 +1127,11 @@ def _convert_to_execution_result_record(plan_record, plan_result):
             else:
                 error_payload = {
                     "error_type": "execution_failure",
-                    "message": str(raw_error) if raw_error is not None else "step failed without structured error payload",
+                    "message": (
+                        str(raw_error)
+                        if raw_error is not None
+                        else "step failed without structured error payload"
+                    ),
                 }
 
         step_results.append(
