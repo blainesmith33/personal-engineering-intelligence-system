@@ -841,6 +841,53 @@ def _collect_runtime_surface_summary(repo_root: Path) -> dict[str, Any]:
     }
 
 
+def _is_meta_recommendation(task: str | None, task_type: str | None) -> bool:
+    if task_type == "artifact_driven_progression":
+        return True
+
+    if task is None:
+        return False
+
+    normalized = task.strip().lower()
+    if not normalized:
+        return False
+
+    meta_phrases = [
+        "recent-execution artifact summaries",
+        "recent execution artifact summaries",
+        "actual peis history",
+        "choose the next smallest",
+        "choose the next",
+        "select the next",
+        "use grounded recent",
+        "use recent execution artifact",
+        "use the recent execution artifact history",
+        "persisted execution evidence",
+    ]
+    return any(phrase in normalized for phrase in meta_phrases)
+
+
+def _extract_runtime_supersession_signal(output_payload: dict[str, Any]) -> bool:
+    repo_summary = output_payload.get("repo_summary")
+    if not isinstance(repo_summary, dict):
+        return False
+
+    requires_openai = repo_summary.get("runtime_surface_requires_openai_api_key") is True
+    explicit_requirements = repo_summary.get("runtime_surface_has_explicit_startup_requirements") is True
+    return requires_openai and explicit_requirements
+
+
+def _is_stale_recommendation(
+    *,
+    task_type: str | None,
+    newer_runtime_env_hardening_superseded: bool,
+) -> bool:
+    return (
+        task_type == "runtime_env_hardening"
+        and newer_runtime_env_hardening_superseded
+    )
+
+
 def _collect_recent_artifacts_summary(repo_root: Path) -> dict[str, Any]:
     artifact_paths = _list_recent_json_files(
         repo_root / "data" / "execution_artifacts",
@@ -880,8 +927,12 @@ def _collect_recent_artifacts_summary(repo_root: Path) -> dict[str, Any]:
     repeated_recommendation_task_types: list[str] = []
     recommendation_task_types: list[str] = []
 
+    concrete_candidates_succeeded: list[tuple[str, str | None, str | None]] = []
+    concrete_candidates_any: list[tuple[str, str | None, str | None]] = []
     preferred_candidates_succeeded: list[tuple[str, str | None, str | None]] = []
     preferred_candidates_any: list[tuple[str, str | None, str | None]] = []
+
+    newer_runtime_env_hardening_superseded = False
 
     for index, artifact in enumerate(parsed_artifacts):
         execution_status = artifact.get("execution_status")
@@ -924,6 +975,9 @@ def _collect_recent_artifacts_summary(repo_root: Path) -> dict[str, Any]:
             if not isinstance(output_payload, dict):
                 continue
 
+            if _extract_runtime_supersession_signal(output_payload):
+                newer_runtime_env_hardening_superseded = True
+
             recommended_next_task = output_payload.get("recommended_next_task")
             if not isinstance(recommended_next_task, dict):
                 continue
@@ -959,21 +1013,42 @@ def _collect_recent_artifacts_summary(repo_root: Path) -> dict[str, Any]:
                 if normalized_task_type:
                     recommendation_task_types.append(normalized_task_type)
 
-                if normalized_action_type != "review_recent_artifacts":
+                is_meta = _is_meta_recommendation(
+                    normalized_task,
+                    normalized_task_type,
+                )
+                is_stale = _is_stale_recommendation(
+                    task_type=normalized_task_type,
+                    newer_runtime_env_hardening_superseded=newer_runtime_env_hardening_superseded,
+                )
+
+                if normalized_action_type != "review_recent_artifacts" and not is_stale:
                     preferred_candidates_any.append(
                         (normalized_task, normalized_reason, normalized_task_type)
                     )
+
+                    if not is_meta:
+                        concrete_candidates_any.append(
+                            (normalized_task, normalized_reason, normalized_task_type)
+                        )
 
                     if artifact_execution_status == "SUCCEEDED":
                         preferred_candidates_succeeded.append(
                             (normalized_task, normalized_reason, normalized_task_type)
                         )
 
+                        if not is_meta:
+                            concrete_candidates_succeeded.append(
+                                (normalized_task, normalized_reason, normalized_task_type)
+                            )
+
         if index == 0:
             most_recent_action_types = artifact_action_types
 
     preferred_source = (
-        preferred_candidates_succeeded
+        concrete_candidates_succeeded
+        or concrete_candidates_any
+        or preferred_candidates_succeeded
         or preferred_candidates_any
     )
 
