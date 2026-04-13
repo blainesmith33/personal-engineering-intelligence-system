@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_DIR="/home/kimberly/peis"
 VENV_DIR="$REPO_DIR/.venv"
 HOST="0.0.0.0"
-PORT="8000"
+PORT="8010"
 
 cd "$REPO_DIR"
 
@@ -27,12 +27,11 @@ python -c "import fastapi, uvicorn" >/dev/null 2>&1 || {
 
 export PYTHONPATH="$REPO_DIR/src"
 
-echo "Starting PEIS server..."
+echo "Starting PEIS gateway..."
 echo "Repo: $REPO_DIR"
 echo "Python: $(which python)"
-echo "URL: http://$HOST:$PORT"
+echo "Gateway URL: http://$HOST:$PORT"
+echo "Launcher: peis.runtime.gateway.main"
 echo
 
-export PYTHONPATH="/home/kimberly/peis/src"
-
-exec uvicorn peis.server:app --host "$HOST" --port "$PORT"
+exec python -m peis.runtime.gateway.main
