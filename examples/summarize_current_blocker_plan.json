@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "plan_record_id": "plan_summarize_current_blocker",
+  "subject_id": "subject_peis_repo",
+  "plan_type": "inspection",
+  "basis_decision_record_id": "decision_summarize_current_blocker",
+  "basis_stop_state": "RESOLVED",
+  "human_authorized": true,
+  "summary": "Summarize the current PEIS blocker from grounded repo state",
+  "authority": {
+    "authority_class": "authoritative",
+    "evidence_role": "decision",
+    "evidence_snapshot_id": "e1",
+    "policy_snapshot_id": "p1",
+    "source_label": "openwebui_local_model"
+  },
+  "evidence": {
+    "evidence_snapshot_id": "e1",
+    "policy_snapshot_id": "p1"
+  },
+  "determinism": {
+    "file_hash": "fh_summarize_current_blocker_plan",
+    "extractor_binary_hash": "ebh1",
+    "extractor_config_hash": "ech1",
+    "schema_version": "1.0",
+    "policy_snapshot_id": "p1",
+    "evidence_snapshot_id": "e1"
+  },
+  "steps": [
+    {
+      "step_id": "step_summarize_current_blocker",
+      "action_type": "summarize_current_blocker",
+      "description": "Summarize the current PEIS blocker from grounded repo state"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "peis"
+version = "0.1.0"
+description = "Personal Engineering Intelligence System"
+readme = ""
+requires-python = ">=3.12"
+authors = [
+  { name = "Blaine Smith", email = "blainesmith.33@gmail.com" }
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/peis/tests"]
+pythonpath = ["src"]
