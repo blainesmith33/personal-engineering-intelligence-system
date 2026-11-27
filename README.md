@@ -208,7 +208,7 @@ The current prototype is implemented in Python using a `src/` project layout. It
 - Persistent planning and execution artifact stores.
 - A registered capability framework and plan-driven executor.
 - A command-line execution surface.
-- A FastAPI-compatible runtime gateway exposing `/health`, `/v1/models`, and `/v1/chat/completions`.
+- A FastAPI-compatible runtime gateway exposing `/health`, `/v1/models`, and `/v1/chat/completions`. The gateway is a PEIS runtime surface; its existence does not establish successful integration with the separate Open WebUI multi-model interaction environment.
 
 The demonstrated end-to-end vertical slice is:
 
@@ -239,7 +239,7 @@ That test count describes a verified checkpoint, not a claim that every later de
 | Validation and bounded model adjudication | Implemented in first-pass form |
 | Deterministic artifact persistence | Implemented |
 | Registered execution framework | Implemented, with a narrow capability surface |
-| Runtime gateway | Implemented |
+| Runtime gateway | Implemented; Open WebUI multi-model integration not established |
 | Automated test checkpoint | 149/149 passing at the strongest verified checkpoint |
 | Human-approval lifecycle | Specified; complete runtime coverage not yet established |
 | Execution configuration lifecycle | Specified; complete runtime coverage not yet established |
@@ -305,12 +305,70 @@ PEIS exists to make increasingly ambitious engineering work more understandable,
 
 ---
 
-## Development history and the intended collaboration environment
+## Development history, intended interaction environment, and evidence
 
-The broader Open WebUI environment—not PEIS alone—was intended to let Blaine work with a local model and retrieval as memory/evidence support and ChatGPT as a reasoning resource, with Blaine retaining authority to direct, correct, interrupt, and approve. Blaine clarified that Open WebUI was the shared interface and PEIS was a system component within that environment; he reported that both models could be present in the room but could not communicate with each other. He required a durable, rigorous system rather than a temporary demo and explicitly confirmed bounded multi-model interaction as an intended behavior. [Conversation: `raw_chats/source_exports/PEIS - Project Index_69c96513-b4d8-83e8-9f09-58676374c3e6.raw.json`, active-branch message 42; `raw_chats/source_exports/Orchestrator for Multi-Agent Interaction_69cecc12-d290-83e8-b2fb-c33bdd7e739f.raw.json`, messages 40 and 44; `raw_chats/source_exports/PEIS Conversation Layer_69ceb26c-5fdc-83e8-b08a-9496fef66981.raw.json`, messages 12, 33, and 58].
+### PEIS is a component, not the entire AI environment
 
-The conversations also record important implementation divergence: Blaine rejected a gateway that returned structured JSON as satisfying the intended shared interaction experience. The implemented planning, validation, execution, storage, and gateway components are real software in this repository, but they should not be presented as proof that the full local-memory/cloud-reasoning environment is complete. This gap is part of the project’s current state.
+The project conversations make an important system-boundary distinction:
 
-Blaine set the objectives, authority boundaries, operational constraints, implementation priorities, and acceptance judgments, and corrected wrong paths, missing scaffolding, technical errors, and claims of completion that did not match the behavior. AI tools generated and revised substantial code, schemas, technical instructions, tests, and documentation. This is extensive AI-assisted development under human direction, not evidence that every implementation detail or line was independently authored by Blaine.
+- **Open WebUI** is the shared user-facing environment in which Blaine wanted to interact with ChatGPT and the local AI.
+- **The local model and its retrieval/memory sources** are intended to contribute relevant project context and first-pass responses.
+- **ChatGPT** is intended to contribute higher-level reasoning, correction, and synthesis using the local model's contribution.
+- **PEIS** is a governed engineering-intelligence component within that environment. It is responsible for structured planning, validation, bounded execution, and evidence-backed operational learning. It is not the chat interface and is not, by itself, what makes the two models communicate.
 
-The 149/149 test result elsewhere in this README is supported by a historical terminal capture in `raw_chats/source_exports/PEIS - IMP cont a_69c9a38e-4114-83e8-87f4-5f888dce02a6.raw.json`, active-branch messages 272 and 312. It was not rerun during this review and does not establish the unimplemented full environment or production readiness. See `src/peis/tests/` for test code and the cited raw conversation exports for implementation context and unresolved interaction design.
+The intended interaction is not a system that converts every user message into a JSON plan. Ordinary questions and discussion should remain ordinary conversation. Structured plan output is appropriate when the user is actually asking PEIS to plan or execute an engineering task.
+
+### Intended multi-model interaction
+
+The extracted project conversations describe the following target behavior:
+
+1. The user submits a request in the shared environment.
+2. The local AI contributes first, using relevant local knowledge, retrieval, and project context.
+3. ChatGPT reasons over the user's request and the local AI's contribution, correcting, challenging, or synthesizing as appropriate.
+4. The user can observe the exchange, direct it, interrupt it, correct either model, and retain authority over decisions and consequential actions.
+5. The interaction is bounded rather than an uncontrolled agent loop; the design discussions specify a maximum of two messages per AI before returning control to the user.
+
+This interaction design is related to PEIS but is not equivalent to the governed planning/execution pipeline. The README therefore distinguishes the working PEIS core from the still-unresolved shared conversation integration.
+
+### What the conversations actually verify
+
+The project history supports these separate conclusions:
+
+- Open WebUI was running and accessible, and Blaine was able to place both ChatGPT and the local model in the same room. The unresolved issue was that the two models were not communicating with one another as intended.
+- Ollama and the local `qwen2.5:3b` model were callable on the XPS.
+- ChatGPT was callable through the API in a separate test.
+- A sequential local-model-to-ChatGPT script was exercised outside Open WebUI. That experiment did not establish the intended integrated experience: outputs were sometimes echoed or malformed, and attempts to post messages into existing Open WebUI chats failed (including a `405 Method Not Allowed` response).
+- A PEIS FastAPI gateway and planning/execution pipeline were implemented. Their existence and the successful PEIS vertical slice do not prove that the shared Open WebUI conversation flow was completed.
+- The extracted hand-off records explicitly identify the interactive environment integration and meaningful local-model/ChatGPT collaboration as unfinished. The current project should not be described as having a completed multi-agent conversation environment.
+
+Attempts to inject or replay messages into existing Open WebUI conversations through undocumented endpoints were abandoned. That approach is not an accepted integration mechanism and should not be presented as a completed feature.
+
+### Development ownership and AI assistance
+
+The conversations record Blaine setting the project objectives, intended system behavior, authority boundaries, constraints, implementation priorities, and acceptance criteria. They also record his corrections when implementation work drifted from those requirements, including corrections to the distinction between Open WebUI and PEIS.
+
+AI tools generated and revised substantial code, schemas, technical instructions, tests, and documentation under Blaine's direction. This is AI-assisted development guided by the user's concepts and decisions; it is not evidence that every implementation detail or line of code was independently authored by Blaine.
+
+### Test evidence and limits
+
+The **149/149 automated test** result is a historical verified checkpoint recorded in the PEIS implementation conversations. It was not rerun as part of this README update and does not establish that all later changes pass, that the complete PEIS environment is implemented, or that the Open WebUI multi-model integration works.
+
+### Conversation archive
+
+The project conversation archive is retained under `extracted_chats/`. It contains readable Markdown exports and corresponding raw JSON exports. These files are provenance and development-history evidence, not runtime dependencies or an authoritative substitute for the current source code and tests.
+
+The principal PEIS design and implementation records include:
+
+- `PEIS - Project Index`
+- `PEIS Project Overview`
+- `PEIS Environment Design`
+- `PEIS Implementation Query`
+- `PEIS Implementation Questions`
+- `PEIS Planning Review`
+- `PEIS Conversation Layer`
+- `Orchestrator for Multi-Agent Interaction`
+- `PEIS hand-off details`
+- `Iteration drift explanation`
+
+`Browser Copy Workaround` records the separate Chat Archive Extractor effort. That extractor is a neighboring project, not a PEIS subsystem; its conversation is retained here only as part of the historical archive.
+
