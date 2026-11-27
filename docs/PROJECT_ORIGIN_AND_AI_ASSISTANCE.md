@@ -3,7 +3,7 @@
 **Project:** Personal Engineering Intelligence System (PEIS)  
 **Originator and system designer:** Blaine Smith  
 **Record status:** Initial evidence-based contribution record; detailed message-by-message provenance analysis remains in scope.  
-**Evidence location:** [`raw_chats/source_exports/`](../raw_chats/source_exports/)
+**Evidence location:** [`extracted_chats/`](../extracted_chats/)
 
 ## Purpose of this record
 
@@ -49,7 +49,7 @@ Where Codex or another coding agent generated code, changed files, or ran reposi
 
 ## Evidence and interpretation boundaries
 
-The repository contains 13 original PEIS Markdown conversation exports and 13 matching raw JSON exports under `raw_chats/source_exports/`. These are the primary records for reconstructing chronology and separating user-originated decisions from assistant suggestions and implementation output.
+The repository contains 13 original PEIS Markdown conversation exports and 13 matching raw JSON exports under `extracted_chats/`. These are the primary records for reconstructing chronology and separating user-originated decisions from assistant suggestions and implementation output.
 
 The Markdown files are readable exports of human-visible conversation branches. The matching raw JSON files preserve the underlying conversation data and should be used to verify message roles, ordering, and any ambiguities in the Markdown rendering.
 
@@ -84,7 +84,7 @@ This should become a claim-by-claim provenance matrix. The matrix must distingui
 
 ## Primary source conversations
 
-All 13 Markdown exports and their matching `.raw.json` files in `raw_chats/source_exports/` are primary sources. The initial review has identified these conversations as especially relevant:
+All 13 Markdown exports and their matching raw JSON exports in `extracted_chats/` are primary sources. The initial review has identified these conversations as especially relevant:
 
 - `PEIS - Project Index_69c96513-b4d8-83e8-9f09-58676374c3e6.md`
 - `PEIS Planning Review_69ce7d11-082c-83e8-9523-b2bf00c68cb2.md`
