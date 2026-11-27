@@ -6,7 +6,7 @@ It combines long-term operational continuity, grounded planning, deterministic v
 
 PEIS is not intended to be an autonomous agent that decides what should happen and then acts without oversight. AI systems may interpret, propose, repair, and assist. Deterministic software decides whether a proposal is structurally admissible, and the human retains authority over objectives, policy, approval, and consequential action.
 
-> **Project status:** Advanced architecture and functional-core prototype. PEIS has a working vertical slice from objective through planning, validation, registered execution, and deterministic artifact persistence. The complete personal engineering environment is not yet finished.
+> **Project status:** Advanced architecture with multiple substantial but partly separate implementations. The repository contains a deterministic record/control-plane path, a model-assisted planning subsystem, a PlanRecord-driven capability executor and CLI, and a FastAPI gateway with local Ollama and OpenAI provider adapters. These are **not yet connected into one verified request-to-plan-to-authorized-execution workflow**. The intended shared Open WebUI multi-model environment is also not established. PEIS is not a completed or production-ready platform.
 
 ## Why PEIS Exists
 
@@ -124,48 +124,78 @@ The prototype capability surface includes actions such as:
 
 These capabilities demonstrate the execution pattern. They do not yet represent the intended breadth of the finished system.
 
-## Authoritative Artifact Chain
+## Implemented Records and Separate Execution Paths
 
-PEIS preserves important state as structured, deterministic records rather than leaving it only in chat transcripts.
+The repository contains several structured record models and persistence paths. They are related to the intended PEIS lifecycle, but they do not yet form one integrated end-to-end pipeline.
+
+### Deterministic control-plane path
+
+The typed runtime accepts a `PipelineRequest` that already contains its authority, evidence, determinism, and stop-decision inputs. It builds and validates the corresponding evaluation, decision, and plan records through the deterministic runtime orchestrator.
 
 ```text
-Request
-  → PlanningSessionSnapshot
-  → model draft
-  → validation and bounded adjudication
-  → PlanRecord
-  → ApprovalRecord, when required
-  → ExecutionConfigRecord
-  → registered execution
-  → ExecutionResultRecord
-  → StopArtifact, on HALT
+PipelineRequest
+  → input and cross-module contract validation
+  → deterministic orchestration
+  → EvaluationRecord / DecisionRecord / PlanRecord
 ```
 
-Primary artifact types include:
+### PlanRecord execution path
 
-| Artifact | Purpose |
+The execution CLI accepts an existing serialized `PlanRecord`, resolves the repository and Python interpreter, executes its steps through a registered capability allow-list, constructs an `ExecutionResultRecord`, and persists that result.
+
+```text
+Existing PlanRecord JSON
+  → registered CapabilityRegistry
+  → PlanExecutionResult
+  → ExecutionResultRecord
+  → persisted result
+```
+
+This is a PlanRecord-driven execution path. It does not, by itself, prove that the model-assisted planning subsystem generated that PlanRecord or that the entire lifecycle is connected.
+
+### Model-assisted planning path
+
+A separate planning subsystem contains code for:
+
+- Building a `PlanningSessionSnapshot`.
+- Retrieving prior planning artifacts as grounding context.
+- Building a versioned prompt pack.
+- Asking a local model to draft a plan.
+- Applying structural and capability validation.
+- Making one bounded ChatGPT adjudication attempt when the initial draft is invalid.
+- Persisting validated-plan, failure, and correction artifacts.
+
+**Current limitation:** the capability-contract lookup in `src/peis/planning/contracts.py` calls `_register_default_capabilities(registry)`, but the function in `src/peis/execution/cli.py` requires a `repo_root` keyword argument. As currently committed, this mismatch prevents the planning validation path from being treated as operational. The planning package also has no direct test module in the current test tree.
+
+### Record types present in the repository
+
+| Record or artifact | Current role |
 |---|---|
-| `PlanningSessionSnapshot` | Freezes the evidence, policies, capabilities, versions, and relevant context used for planning |
-| `PlanRecord` | Represents an admissible, validated plan |
-| `ApprovalRecord` | Records explicit human approval or rejection when policy requires it |
-| `ExecutionConfigRecord` | Binds execution to an explicit configuration |
-| `ExecutionResultRecord` | Records overall and per-step execution outcomes |
-| `StopArtifact` | Records a terminal halt condition and prevents silent continuation |
+| `PlanningSessionSnapshot` | Captures planning-session context and version bindings |
+| `EvaluationRecord` | Represents a structured evaluation |
+| `DecisionRecord` | Represents a governed decision |
+| `PlanRecord` | Represents a validated, capability-bound execution plan |
+| `ExecutionResultRecord` | Represents and persists execution outcomes |
+| Planning failure/correction artifacts | Preserve invalid drafts and adjudication/correction history |
 
-Artifact identity is derived from canonicalized content and its authoritative bindings, including relevant evidence, policies, capabilities, schemas, validators, prompt packs, inputs, and determinism constraints. This makes decisions inspectable and helps expose silent context drift.
+`StopDecision` and the shared `StopState` algebra are implemented. A separate persisted `StopArtifact` is not present. Separate `ApprovalRecord` and `ExecutionConfigRecord` types are also not present in the current source tree; those remain architectural requirements rather than implemented artifact classes.
+
+The full target artifact lifecycle remains a design objective. Diagrams and target requirements should not be read as proof that every named artifact or transition is implemented.
 
 ## Human Authority and Safety
 
-PEIS treats validation, approval, and execution as separate events.
+PEIS separates structural validity, human authorization, and execution.
 
-- A valid plan is not automatically an authorized plan.
-- Approval must be explicit, recorded, and bound to the plan when required.
-- Rejection is preserved as an authoritative outcome.
-- Execution occurs through separately configured, registered capabilities.
-- A `HALT` condition stops forward execution and emits a `StopArtifact`.
-- Recovery from a halt requires a new evaluation context rather than silent in-place resumption.
+- A valid plan is not automatically authorized.
+- `PlanRecord` binds authority, evidence, determinism, and its basis decision/stop state.
+- `PlanRecord` enforces the shared stop-state rules and the human gate for states that require intervention.
+- Registered capabilities can independently declare that human authorization is required; the executor checks the plan's `human_authorized` value before invoking such a capability.
+- Execution is restricted to capabilities registered in an explicit allow-list. Arbitrary model-generated shell commands are not an execution capability.
+- HALT stop states are defined and prevent normal plan progression. A separate persisted `StopArtifact` lifecycle is not implemented.
+- The current implementation carries authorization as a boolean on the plan; it does not yet provide a separate persisted `ApprovalRecord` lifecycle.
+- A complete persisted execution-configuration artifact and lifecycle are not implemented.
 
-Human beings remain responsible for objectives, legitimacy, policy, priorities, approval, and final authority.
+The design keeps objectives, legitimacy, policy, priorities, approval, and final authority with the human. The code implements parts of these boundaries; the complete approval and execution-governance lifecycle remains unfinished.
 
 ## Learning Without Uncontrolled Self-Modification
 
@@ -198,78 +228,107 @@ Other systems may provide continuity, memory, or retrieval to PEIS through expli
 
 ## Current Implementation
 
-The current prototype is implemented in Python using a `src/` project layout. Its working components include:
+The repository is a Python project using a `src/` layout and requiring Python 3.12 or later. The source tree contains the following distinct implementation areas.
 
-- Planning-session snapshot construction.
-- Local-model draft generation through an Ollama adapter.
-- Schema and contract validation.
-- Bounded escalation, repair, and adjudication.
-- Deterministic plan, failure, correction, and result artifacts.
-- Persistent planning and execution artifact stores.
-- A registered capability framework and plan-driven executor.
-- A command-line execution surface.
-- A FastAPI-compatible runtime gateway exposing `/health`, `/v1/models`, and `/v1/chat/completions`. The gateway is a PEIS runtime surface; its existence does not establish successful integration with the separate Open WebUI multi-model interaction environment.
+### Deterministic records and control-plane primitives
 
-The demonstrated end-to-end vertical slice is:
+Implemented code includes:
 
-```text
-Objective
-  → grounded planning context
-  → AI-generated draft
-  → deterministic validation or bounded repair
-  → validated plan
-  → registered execution
-  → deterministic result artifact
-  → persistence
-```
+- Authority classes and evidence-role bindings.
+- Evidence and determinism envelopes, including mismatch detection.
+- A shared stop-state model and cross-module enforcement functions.
+- Structured `EvaluationRecord`, `DecisionRecord`, and `PlanRecord` models and builders.
+- A typed deterministic runtime request/orchestration path.
+- JSON artifact storage and loading.
 
-A verified `run_pytest` execution successfully completed through this pipeline and produced a persisted execution record. At the strongest verified implementation checkpoint, the integrated core reported **149 of 149 automated tests passing**.
+### Capability execution
 
-That test count describes a verified checkpoint, not a claim that every later design requirement is already implemented.
+Implemented code includes:
+
+- An explicit `CapabilityRegistry` allow-list with no dynamic imports or fallback execution.
+- A `PlanRecord` executor that checks capability registration and human-authorization requirements.
+- An execution CLI that accepts a serialized `PlanRecord`, resolves the repository root and repo-local Python interpreter, runs registered handlers, and persists an `ExecutionResultRecord`.
+- Seven CLI-registered capabilities: `noop`, `run_pytest`, `identify_next_task`, `summarize_current_blocker`, `review_repo_state`, `review_runtime_surface`, and `review_recent_artifacts`.
+
+The CLI's execution path begins with an already-created `PlanRecord`. It is not currently wired directly to the model-assisted planning runtime.
+
+### Model-assisted planning
+
+The repository contains a separate planning package with snapshot construction, Ollama invocation, retrieval, prompt-pack construction, draft generation, schema/capability validation, bounded adjudication, and planning-artifact persistence.
+
+This package is **present in source but not currently verified as runnable at the repository's current HEAD**. In particular, the capability-registry call-signature mismatch described above blocks the validation path. There are no dedicated tests for the planning package in the current test tree.
+
+### Runtime gateway and model providers
+
+A FastAPI gateway is present with:
+
+- `GET /health`
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+
+Its `GatewayOrchestrator` calls the configured local Ollama provider first and the OpenAI provider second. The current gateway prompt/validator accepts a strict JSON action-plan shape and allows only the `run_pytest` action. Default turn budgets are up to two local-model turns and two OpenAI turns, with a four-turn total limit.
+
+This gateway is a separate model-orchestration surface. The API returns the gateway's JSON response; it does not currently invoke the PEIS `PlanningRuntime`, convert the result into the canonical `PlanRecord`, or execute it through the governed CLI. The gateway configuration also defaults `enable_pipeline_execution` to false. No gateway-specific test module is present.
+
+The gateway's existence does not establish a completed Open WebUI integration. The project conversations record attempts to use Open WebUI as the shared user-facing environment, but the intended multi-model conversation and human hand-back behavior remain unverified. The gateway's internal turn budget is not the same thing as a demonstrated interactive hand-back to the user.
+
+### Test evidence and operational limits
+
+The current repository contains 21 test modules covering core contracts, record construction, storage, execution, and the typed runtime pipeline. The project history records a strongest verified checkpoint of **149/149 automated tests passing**. That is a historical result: tests were not executed as part of this README audit, and the current test tree does not directly exercise the planning package or runtime gateway.
+
+The repository's packaging and launch configuration are also incomplete:
+
+- `pyproject.toml` declares Python 3.12+ and build tooling, but does not declare the runtime dependencies imported by the application.
+- The server launch script checks for FastAPI and Uvicorn, while the gateway provider modules also import `requests` and `openai`.
+- The current launch scripts contain machine-specific assumptions: `start_peis.sh` and `run_peis_server.sh` use `/home/kimberly/peis`, and `run_peis.sh` expects an SSH host alias named `xps`.
+
+PEIS is therefore best described as an **advanced architecture with a substantial but partially integrated implementation**. It is not yet a stable daily-use environment or a production-ready platform.
 
 ## Development Status
 
 | Area | Status |
 |---|---|
 | Mission, scope, and governing principles | Established |
-| Boundary between PEIS and memory/retrieval systems | Established |
-| Canonical governed control-plane design | Substantially complete |
-| Canonical architecture gap resolution | Complete for the recorded 18-gap synthesis |
-| Planning pipeline | Implemented and demonstrated |
-| Validation and bounded model adjudication | Implemented in first-pass form |
-| Deterministic artifact persistence | Implemented |
-| Registered execution framework | Implemented, with a narrow capability surface |
-| Runtime gateway | Implemented; Open WebUI multi-model integration not established |
-| Automated test checkpoint | 149/149 passing at the strongest verified checkpoint |
-| Human-approval lifecycle | Specified; complete runtime coverage not yet established |
-| Execution configuration lifecycle | Specified; complete runtime coverage not yet established |
-| HALT and `StopArtifact` lifecycle | Specified; complete end-to-end coverage not yet established |
+| Boundary between PEIS and external memory/retrieval systems | Established |
+| Canonical governed control-plane design | Substantially established |
+| Core authority, evidence, determinism, and stop-state primitives | Implemented |
+| Evaluation, decision, and plan record models | Implemented |
+| Typed deterministic runtime orchestration | Implemented and covered by tests |
+| PlanRecord-based capability executor | Implemented |
+| Execution CLI and persisted execution results | Implemented; begins from an existing PlanRecord |
+| Default CLI capability inventory | Seven capabilities registered |
+| Model-assisted planning subsystem | Source present; current capability-registry call mismatch blocks validation |
+| Planning artifact retrieval and persistence | Implemented in source; current runtime path not verified |
+| FastAPI gateway and provider adapters | Implemented in source; gateway behavior lacks direct test coverage |
+| Gateway-to-PEIS planning/execution integration | Not implemented |
+| Open WebUI shared multi-model interaction | Not established |
+| Separate ApprovalRecord lifecycle | Not implemented |
+| Separate ExecutionConfigRecord lifecycle | Not implemented |
+| Persisted StopArtifact lifecycle | Not implemented; StopDecision/StopState primitives exist |
+| Human-authorization gate | Partially implemented through PlanRecord and capability checks |
+| Automated test checkpoint | 149/149 passing at a historical verified checkpoint; not rerun in this audit |
+| Direct tests for planning and gateway packages | Absent from current test tree |
 | Memory, continuity, and retrieval integration | Boundaries defined; broader integration incomplete |
-| Feedback and learning loop | Partially supported through artifacts; not complete |
-| Stable daily-use operator experience | Incomplete |
+| Feedback and learning loop | Partially supported by planning artifacts; not complete |
+| Portable setup and stable daily-use operator experience | Incomplete |
 | Complete PEIS environment | Not yet implemented |
-
-PEIS is therefore best described as an **advanced architecture with a functional core prototype**, not a production-ready completed platform.
 
 ## Current Priorities
 
-The next stage is to bring the working implementation into full alignment with the canonical architecture and make the system reliable for ordinary engineering use. Major priorities include:
+The next stage is to make the existing components work together and verify their behavior against the repository's actual contracts. The immediate implementation priorities are:
 
-- Reconcile remaining contract drift around planning snapshots and determinism bindings.
-- Correct misleading normalized metadata after adjudication.
-- Improve artifact-driven task selection and reject generic or meta-level recommendations.
-- Expand the registered capability inventory.
-- Complete approval, execution-configuration, and HALT behavior across the runtime.
-- Integrate explicit continuity and retrieval bindings without collapsing neighboring systems into PEIS.
-- Turn stored outcomes into a reliable, evidence-backed feedback loop.
-- Improve planning reliability under host resource contention.
-- Provide a stable daily operator experience, such as:
+- Correct the capability-registry call in `src/peis/planning/contracts.py` so planning validation can resolve the registered action inventory.
+- Add direct tests for planning snapshots, retrieval, draft generation, validation, adjudication, and artifact persistence.
+- Define and test the conversion from a validated planning result into the canonical `PlanRecord` without bypassing authority, evidence, determinism, or stop-state requirements.
+- Connect the planning and execution paths only through that explicit, validated contract.
+- Decide whether the gateway is to become an entry point to the governed planning/execution pipeline or remain a separate model-orchestration surface; do not present it as execution until that integration exists.
+- Add direct tests for gateway configuration, provider adapters, turn-budget behavior, output validation, and API behavior.
+- Establish and verify the intended Open WebUI interaction, including the required human oversight and hand-back behavior.
+- Implement distinct approval, execution-configuration, and persisted stop artifacts if they remain part of the canonical architecture.
+- Declare application runtime dependencies and replace machine-specific launcher paths/SSH aliases with an explicit, portable configuration.
+- Complete the evidence-backed feedback loop and validate PEIS against real engineering work rather than only controlled test objectives.
 
-```bash
-peis plan "my actual engineering problem today"
-```
-
-- Validate the system across real projects rather than only controlled objectives.
+The intended operator experience remains a natural-language entry point for real engineering work, backed by structured planning and governed execution. That experience should not be described as complete until the separate components above are connected and verified.
 
 ## Relationship to the blAIne Ecosystem
 
