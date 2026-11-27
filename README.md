@@ -302,3 +302,15 @@ It is a durable personal engineering environment that helps one person:
 - Convert completed work, mistakes, and discoveries into future capability.
 
 PEIS exists to make increasingly ambitious engineering work more understandable, traceable, governable, and executable while keeping the human in control.
+
+---
+
+## Development history and the intended collaboration environment
+
+The broader Open WebUI environment—not PEIS alone—was intended to let Blaine work with a local model and retrieval as memory/evidence support and ChatGPT as a reasoning resource, with Blaine retaining authority to direct, correct, interrupt, and approve. Blaine clarified that Open WebUI was the shared interface and PEIS was a system component within that environment; he reported that both models could be present in the room but could not communicate with each other. He required a durable, rigorous system rather than a temporary demo and explicitly confirmed bounded multi-model interaction as an intended behavior. [Conversation: `raw_chats/source_exports/PEIS - Project Index_69c96513-b4d8-83e8-9f09-58676374c3e6.raw.json`, active-branch message 42; `raw_chats/source_exports/Orchestrator for Multi-Agent Interaction_69cecc12-d290-83e8-b2fb-c33bdd7e739f.raw.json`, messages 40 and 44; `raw_chats/source_exports/PEIS Conversation Layer_69ceb26c-5fdc-83e8-b08a-9496fef66981.raw.json`, messages 12, 33, and 58].
+
+The conversations also record important implementation divergence: Blaine rejected a gateway that returned structured JSON as satisfying the intended shared interaction experience. The implemented planning, validation, execution, storage, and gateway components are real software in this repository, but they should not be presented as proof that the full local-memory/cloud-reasoning environment is complete. This gap is part of the project’s current state.
+
+Blaine set the objectives, authority boundaries, operational constraints, implementation priorities, and acceptance judgments, and corrected wrong paths, missing scaffolding, technical errors, and claims of completion that did not match the behavior. AI tools generated and revised substantial code, schemas, technical instructions, tests, and documentation. This is extensive AI-assisted development under human direction, not evidence that every implementation detail or line was independently authored by Blaine.
+
+The 149/149 test result elsewhere in this README is supported by a historical terminal capture in `raw_chats/source_exports/PEIS - IMP cont a_69c9a38e-4114-83e8-87f4-5f888dce02a6.raw.json`, active-branch messages 272 and 312. It was not rerun during this review and does not establish the unimplemented full environment or production readiness. See `src/peis/tests/` for test code and the cited raw conversation exports for implementation context and unresolved interaction design.
